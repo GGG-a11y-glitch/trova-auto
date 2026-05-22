@@ -4,139 +4,194 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#000000">
-    <title>Honor Park & Find</title>
-    <!-- Mappe Gratis -->
+    <title>Honor Park Intelligence</title>
+    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
-        :root { --bg: #000; --accent: #3b82f6; --card: #121212; --text: #fff; --dim: #888; }
+        :root { --bg: #000; --card: #121212; --accent: #3b82f6; --text: #fff; --dim: #888; --safe: #00e676; --glass: rgba(255,255,255,0.05); }
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-        body { background: var(--bg); color: var(--text); font-family: sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-
-        /* META' SUPERIORE: Mappa Live */
-        #map { height: 50vh; width: 100%; border-bottom: 2px solid var(--accent); }
-
-        /* META' INFERIORE: Comandi */
-        .controls { height: 50vh; padding: 20px; display: flex; flex-direction: column; gap: 15px; background: #000; overflow-y: auto; }
-
-        .btn-park { 
-            background: var(--accent); color: white; border: none; padding: 20px; border-radius: 25px;
-            font-size: 1.2rem; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;
-            box-shadow: 0 5px 15px rgba(59, 130, 246, 0.4);
-        }
-        .btn-park:active { transform: scale(0.95); }
-
-        .saved-info { 
-            background: var(--card); padding: 20px; border-radius: 25px; border: 1px solid #222;
-            display: none; flex-direction: column; gap: 12px;
+        
+        body { 
+            background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; 
+            height: 100vh; display: flex; flex-direction: column; overflow: hidden; 
         }
 
-        .label { font-size: 0.6rem; color: var(--dim); text-transform: uppercase; font-weight: 800; }
-        .val { font-size: 0.9rem; color: #00e676; font-weight: 600; }
+        /* MAPPA (Metà superiore) */
+        #map { flex: 1.2; width: 100%; position: relative; }
+        #map::after { content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 40px; background: linear-gradient(0deg, #000, transparent); z-index: 1000; pointer-events: none; }
 
-        .note-input {
-            background: #1a1a1a; border: 1px solid #333; border-radius: 12px; padding: 12px;
-            color: white; font-size: 0.9rem; width: 100%;
+        /* CONTROLLI (Metà inferiore) */
+        .ui-panel { 
+            flex: 1; padding: 20px; background: #000; 
+            border-top-left-radius: 30px; border-top-right-radius: 30px;
+            box-shadow: 0 -10px 30px rgba(0,0,0,0.5); z-index: 1001;
+            display: flex; flex-direction: column; gap: 20px; overflow-y: auto;
         }
 
-        .btn-nav {
-            background: white; color: black; text-decoration: none; padding: 15px;
-            border-radius: 18px; font-weight: 800; text-align: center; margin-top: 5px;
-        }
+        .section-title { font-size: 0.7rem; color: var(--dim); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px; font-weight: 800; }
 
-        .btn-clear { background: none; border: none; color: #ff4b4b; font-size: 0.7rem; text-decoration: underline; margin-top: 10px; cursor: pointer; }
+        /* Card Auto Salvata */
+        #parked-card {
+            background: var(--card); border: 1px solid rgba(255,255,255,0.1); padding: 20px; border-radius: 25px;
+            display: none; flex-direction: column; gap: 15px; animation: slideIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes slideIn { from { transform: translateY(50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        .addr-box { color: var(--safe); font-weight: 600; font-size: 0.95rem; line-height: 1.4; }
+        .time-badge { font-size: 0.7rem; background: rgba(0,230,118,0.15); color: var(--safe); padding: 4px 10px; border-radius: 10px; width: fit-content; margin-top: 5px; }
+
+        .btn-main {
+            background: var(--accent); color: #fff; border: none; padding: 18px; border-radius: 20px;
+            font-size: 1rem; font-weight: 800; text-transform: uppercase; cursor: pointer; text-align: center; text-decoration: none;
+        }
+        .btn-nav { background: #fff; color: #000; }
+        .btn-clear { background: none; color: #ff4b4b; font-size: 0.8rem; border: none; text-decoration: underline; margin-top: 10px; }
+
+        /* Suggestion Tiles */
+        .suggestion-row { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 10px; scrollbar-width: none; }
+        .suggestion-row::-webkit-scrollbar { display: none; }
+        .s-tile { 
+            flex: 0 0 140px; background: var(--glass); border: 1px solid rgba(255,255,255,0.05); 
+            padding: 15px; border-radius: 20px; font-size: 0.8rem; cursor: pointer;
+        }
+        .s-tile:active { background: rgba(255,255,255,0.1); }
+        .s-tile b { display: block; color: var(--accent); margin-bottom: 4px; }
+        .s-tile span { font-size: 0.7rem; color: var(--dim); }
+
+        .loader-bar { position: fixed; top: 0; left: 0; height: 3px; background: var(--accent); z-index: 2000; width: 0%; transition: width 0.3s; }
     </style>
 </head>
 <body>
 
-    <!-- Mappa Live -->
+    <div id="loader" class="loader-bar"></div>
     <div id="map"></div>
 
-    <!-- Comandi -->
-    <div class="controls">
-        <button class="btn-park" id="parkBtn">🅿️ PARCHEGGIA QUI!</button>
-
-        <div id="savedCard" class="saved-info">
-            <div style="display: flex; justify-content: space-between;">
-                <div><span class="label">Ora</span><div class="val" id="timeText">--:--</div></div>
-                <div style="text-align: right;"><span class="label">Tempo trascorso</span><div class="val" id="timerText">0m</div></div>
+    <div class="ui-panel">
+        
+        <!-- Stato A: Non Parcheggiato -->
+        <div id="free-state">
+            <button class="btn-main" id="btn-park" style="width: 100%;">🅿️ Segna Parcheggio Qui</button>
+            
+            <div style="margin-top: 25px;">
+                <h2 class="section-title">Parcheggi Gratuiti Vicini</h2>
+                <div class="suggestion-row" id="suggestions">
+                    <div class="s-tile"><span>Ricerca in corso...</span></div>
+                </div>
             </div>
-
-            <div>
-                <span class="label">Note (Piano/Posto)</span>
-                <input type="text" id="noteInput" class="note-input" placeholder="Es: Piano -2, Posto 45">
-            </div>
-
-            <a href="#" id="navLink" target="_blank" class="btn-nav">🚀 PORTAMI ALL'AUTO</a>
-            <button class="btn-clear" id="clearBtn">Rimuovi Parcheggio</button>
         </div>
 
-        <div id="status" style="font-size: 0.6rem; color: #444; text-align: center; margin-top: auto;">In attesa del GPS...</div>
+        <!-- Stato B: Parcheggiato -->
+        <div id="parked-card">
+            <h2 class="section-title">La tua Auto è qui:</h2>
+            <div class="addr-box" id="addr-text">Via...</div>
+            <div class="time-badge" id="time-badge">Parcheggiata alle --:--</div>
+            
+            <a href="#" id="nav-link" target="_blank" class="btn-main btn-nav">🚀 Naviga verso l'auto</a>
+            
+            <button class="btn-clear" id="btn-reset">Ho ritrovato l'auto</button>
+        </div>
+
     </div>
 
-    <!-- Script delle Mappe -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         let map, userMarker, carMarker;
-        const savedCard = document.getElementById('savedCard');
-        const parkBtn = document.getElementById('parkBtn');
+        const ld = document.getElementById('loader');
 
-        // 1. Inizializza Mappa
-        map = L.map('map', { zoomControl: false }).setView([45, 9], 15);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+        // Inizializzazione Mappa
+        function init() {
+            map = L.map('map', { zoomControl: false }).setView([45, 9], 15);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
 
-        // 2. Recupera dati salvati
-        const saved = JSON.parse(localStorage.getItem('my_car'));
-        if(saved) showCar(saved.lat, saved.lon, saved.time, saved.note);
-
-        // 3. Trova Utente
-        navigator.geolocation.watchPosition(p => {
-            const {latitude: lat, longitude: lon} = p.coords;
-            if(!userMarker) {
-                userMarker = L.circleMarker([lat, lon], {radius: 8, color: '#3b82f6', fillOpacity: 1}).addTo(map);
-                map.setView([lat, lon], 17);
-            } else {
-                userMarker.setLatLng([lat, lon]);
+            // Carica dati salvati
+            const saved = JSON.parse(localStorage.getItem('honor_park'));
+            if(saved) {
+                showParkedUI(saved.lat, saved.lon, saved.time, saved.addr);
             }
-            document.getElementById('status').innerText = "GPS Attivo - Posizione precisa";
-        }, null, {enableHighAccuracy: true});
 
-        // 4. Bottone Parcheggia
-        parkBtn.onclick = () => {
-            navigator.geolocation.getCurrentPosition(p => {
-                const lat = p.coords.latitude;
-                const lon = p.coords.longitude;
-                const time = Date.now();
-                const note = "";
-                localStorage.setItem('my_car', JSON.stringify({lat, lon, time, note}));
-                showCar(lat, lon, time, note);
-            });
-        };
-
-        function showCar(lat, lon, time, note) {
-            savedCard.style.display = 'flex';
-            parkBtn.style.display = 'none';
-            document.getElementById('timeText').innerText = new Date(time).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
-            document.getElementById('noteInput').value = note;
-            document.getElementById('navLink').href = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}&travelmode=walking`;
-            
-            if(carMarker) map.removeLayer(carMarker);
-            carMarker = L.marker([lat, lon], {icon: L.divIcon({html: '🚗', className: '', iconSize: [30,30], iconAnchor: [15,15]})}).addTo(map);
-            
-            setInterval(() => {
-                const mins = Math.floor((Date.now() - time) / 60000);
-                document.getElementById('timerText').innerText = mins + "m";
-            }, 60000);
+            // Tracking Utente
+            navigator.geolocation.watchPosition(p => {
+                const {latitude: lat, longitude: lon} = p.coords;
+                if(!userMarker) {
+                    userMarker = L.circleMarker([lat, lon], {radius: 8, color: '#3b82f6', fillOpacity: 1, weight: 3}).addTo(map);
+                    if(!saved) map.setView([lat, lon], 17);
+                    findFreeParking(lat, lon); // Cerca suggerimenti gratuiti
+                } else {
+                    userMarker.setLatLng([lat, lon]);
+                }
+            }, null, {enableHighAccuracy: true});
         }
 
-        document.getElementById('noteInput').oninput = (e) => {
-            const data = JSON.parse(localStorage.getItem('my_car'));
-            data.note = e.target.value;
-            localStorage.setItem('my_car', JSON.stringify(data));
+        // Cerca Parcheggi Gratuiti (Overpass API)
+        async function findFreeParking(lat, lon) {
+            try {
+                const query = `[out:json];node["amenity"="parking"](around:1000,${lat},${lon});out 5;`;
+                const res = await fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`);
+                const data = await res.json();
+                
+                const container = document.getElementById('suggestions');
+                container.innerHTML = '';
+                
+                if(data.elements.length === 0) {
+                    container.innerHTML = '<div class="s-tile"><span>Nessun parcheggio pubblico censito nelle vicinanze.</span></div>';
+                    return;
+                }
+
+                data.elements.forEach(el => {
+                    const tile = document.createElement('div');
+                    tile.className = 's-tile';
+                    tile.onclick = () => window.open(`https://www.google.com/maps?q=${el.lat},${el.lon}`);
+                    tile.innerHTML = `<b>🅿️ Pubblico</b><span>Tocca per navigare qui</span>`;
+                    container.appendChild(tile);
+                });
+            } catch(e) { console.log("Errore suggerimenti"); }
+        }
+
+        // Bottone Parcheggia
+        document.getElementById('btn-park').onclick = async () => {
+            ld.style.width = '50%';
+            navigator.geolocation.getCurrentPosition(async (p) => {
+                const {latitude: lat, longitude: lon} = p.coords;
+                const time = Date.now();
+                
+                // Reverse Geocoding per indirizzo
+                let addr = "Indirizzo rilevato";
+                try {
+                    const g = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`).then(r => r.json());
+                    addr = `${g.address.road || ''} ${g.address.house_number || ''}, ${g.address.city || ''}`;
+                } catch(e) {}
+
+                localStorage.setItem('honor_park', JSON.stringify({lat, lon, time, addr}));
+                showParkedUI(lat, lon, time, addr);
+                ld.style.width = '100%';
+                setTimeout(()=>ld.style.width='0%', 500);
+            }, null, {enableHighAccuracy: true});
         };
 
-        document.getElementById('clearBtn').onclick = () => {
-            if(confirm("Ritrovata?")) { localStorage.removeItem('my_car'); location.reload(); }
+        function showParkedUI(lat, lon, time, addr) {
+            document.getElementById('free-state').style.display = 'none';
+            document.getElementById('parked-card').style.display = 'flex';
+            document.getElementById('addr-text').innerText = addr;
+            document.getElementById('time-badge').innerText = `Parcheggiata alle ${new Date(time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
+            document.getElementById('nav-link').href = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}&travelmode=walking`;
+
+            if(carMarker) map.removeLayer(carMarker);
+            carMarker = L.marker([lat, lon], {
+                icon: L.divIcon({html: '🚗', className: '', iconSize:[40,40], iconAnchor:[20,20]})
+            }).addTo(map);
+            
+            map.setView([lat, lon], 17);
+        }
+
+        document.getElementById('btn-reset').onclick = () => {
+            if(confirm("Ritrovata?")) {
+                localStorage.removeItem('honor_park');
+                location.reload();
+            }
         };
+
+        window.onload = init;
     </script>
 </body>
 </html>
