@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#000000">
+    <title>Honor Park & Find</title>
+    <!-- Mappe Gratis -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        :root { --bg: #000; --accent: #3b82f6; --card: #121212; --text: #fff; --dim: #888; }
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        body { background: var(--bg); color: var(--text); font-family: sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+        /* META' SUPERIORE: Mappa Live */
+        #map { height: 50vh; width: 100%; border-bottom: 2px solid var(--accent); }
+
+        /* META' INFERIORE: Comandi */
+        .controls { height: 50vh; padding: 20px; display: flex; flex-direction: column; gap: 15px; background: #000; overflow-y: auto; }
+
+        .btn-park { 
+            background: var(--accent); color: white; border: none; padding: 20px; border-radius: 25px;
+            font-size: 1.2rem; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;
+            box-shadow: 0 5px 15px rgba(59, 130, 246, 0.4);
+        }
+        .btn-park:active { transform: scale(0.95); }
+
+        .saved-info { 
+            background: var(--card); padding: 20px; border-radius: 25px; border: 1px solid #222;
+            display: none; flex-direction: column; gap: 12px;
+        }
+
+        .label { font-size: 0.6rem; color: var(--dim); text-transform: uppercase; font-weight: 800; }
+        .val { font-size: 0.9rem; color: #00e676; font-weight: 600; }
+
+        .note-input {
+            background: #1a1a1a; border: 1px solid #333; border-radius: 12px; padding: 12px;
+            color: white; font-size: 0.9rem; width: 100%;
+        }
+
+        .btn-nav {
+            background: white; color: black; text-decoration: none; padding: 15px;
+            border-radius: 18px; font-weight: 800; text-align: center; margin-top: 5px;
+        }
+
+        .btn-clear { background: none; border: none; color: #ff4b4b; font-size: 0.7rem; text-decoration: underline; margin-top: 10px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <!-- Mappa Live -->
+    <div id="map"></div>
+
+    <!-- Comandi -->
+    <div class="controls">
+        <button class="btn-park" id="parkBtn">🅿️ PARCHEGGIA QUI!</button>
+
+        <div id="savedCard" class="saved-info">
+            <div style="display: flex; justify-content: space-between;">
+                <div><span class="label">Ora</span><div class="val" id="timeText">--:--</div></div>
+                <div style="text-align: right;"><span class="label">Tempo trascorso</span><div class="val" id="timerText">0m</div></div>
+            </div>
+
+            <div>
+                <span class="label">Note (Piano/Posto)</span>
+                <input type="text" id="noteInput" class="note-input" placeholder="Es: Piano -2, Posto 45">
+            </div>
+
+            <a href="#" id="navLink" target="_blank" class="btn-nav">🚀 PORTAMI ALL'AUTO</a>
+            <button class="btn-clear" id="clearBtn">Rimuovi Parcheggio</button>
+        </div>
+
+        <div id="status" style="font-size: 0.6rem; color: #444; text-align: center; margin-top: auto;">In attesa del GPS...</div>
+    </div>
+
+    <!-- Script delle Mappe -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        let map, userMarker, carMarker;
+        const savedCard = document.getElementById('savedCard');
+        const parkBtn = document.getElementById('parkBtn');
+
+        // 1. Inizializza Mappa
+        map = L.map('map', { zoomControl: false }).setView([45, 9], 15);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+
+        // 2. Recupera dati salvati
+        const saved = JSON.parse(localStorage.getItem('my_car'));
+        if(saved) showCar(saved.lat, saved.lon, saved.time, saved.note);
+
+        // 3. Trova Utente
+        navigator.geolocation.watchPosition(p => {
+            const {latitude: lat, longitude: lon} = p.coords;
+            if(!userMarker) {
+                userMarker = L.circleMarker([lat, lon], {radius: 8, color: '#3b82f6', fillOpacity: 1}).addTo(map);
+                map.setView([lat, lon], 17);
+            } else {
+                userMarker.setLatLng([lat, lon]);
+            }
+            document.getElementById('status').innerText = "GPS Attivo - Posizione precisa";
+        }, null, {enableHighAccuracy: true});
+
+        // 4. Bottone Parcheggia
+        parkBtn.onclick = () => {
+            navigator.geolocation.getCurrentPosition(p => {
+                const lat = p.coords.latitude;
+                const lon = p.coords.longitude;
+                const time = Date.now();
+                const note = "";
+                localStorage.setItem('my_car', JSON.stringify({lat, lon, time, note}));
+                showCar(lat, lon, time, note);
+            });
+        };
+
+        function showCar(lat, lon, time, note) {
+            savedCard.style.display = 'flex';
+            parkBtn.style.display = 'none';
+            document.getElementById('timeText').innerText = new Date(time).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+            document.getElementById('noteInput').value = note;
+            document.getElementById('navLink').href = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}&travelmode=walking`;
+            
+            if(carMarker) map.removeLayer(carMarker);
+            carMarker = L.marker([lat, lon], {icon: L.divIcon({html: '🚗', className: '', iconSize: [30,30], iconAnchor: [15,15]})}).addTo(map);
+            
+            setInterval(() => {
+                const mins = Math.floor((Date.now() - time) / 60000);
+                document.getElementById('timerText').innerText = mins + "m";
+            }, 60000);
+        }
+
+        document.getElementById('noteInput').oninput = (e) => {
+            const data = JSON.parse(localStorage.getItem('my_car'));
+            data.note = e.target.value;
+            localStorage.setItem('my_car', JSON.stringify(data));
+        };
+
+        document.getElementById('clearBtn').onclick = () => {
+            if(confirm("Ritrovata?")) { localStorage.removeItem('my_car'); location.reload(); }
+        };
+    </script>
+</body>
+</html>
